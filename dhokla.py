@@ -45,6 +45,8 @@ class Token:
         if self.value: return f'{self.type}:{self.value}'
         return f'{self.type}'
 
+
+
 #####################################
 #LEXER
 #####################################
@@ -101,13 +103,78 @@ class Lexer:
             return Token(TT_FLOAT,float(numstr))
         else:
             return Token(TT_INT,int(numstr))
+#####################################
 
 
-            
+#####################################
+#PARSER
+#####################################  
 
+############
+# NODES     
+############
+class NumberNode:
+    def __init__(self,tok) -> None:
+        self.tok = tok
+    def __repr__(self) -> str:
+        return f'{self.tok}'
+    
+class BinOpNode:
+    def __init__(self,left,right,op) -> None:
+        self.left = left
+        self.right = right
+        self.op = op
+    def __repr__(self) -> str:
+        return f'({self.left},{self.op},{self.right})'
+############
+
+class Parser:
+    def __init__(self,token) -> None:
+        self.token = token 
+        self.idx = -1
+        self.advance()
+
+    def advance(self):
+        self.idx += 1
+        if self.idx<len(self.token):
+            self.currentTok = self.token[self.idx]
+        return self.currentTok
+    
+    def factor(self): 
+        tok = self.currentTok
+
+        if tok.type in (TT_INT,TT_FLOAT):
+            self.advance()
+            return NumberNode(tok)
+
+    def term(self):
+        return self.binOp(self.factor,(TT_MUL,TT_DIV))
+
+    def expr(self):
+        return self.binOp(self.term,(TT_PLUS,TT_MINUS))
+
+    def binOp(self,func,ops):
+        left = func()
+        while self.currentTok is not None and self.currentTok.type in ops:
+            op_tok = self.currentTok
+            self.advance()
+            right = func()
+            left = BinOpNode(left,right,op_tok)
+        return left
+
+        
+
+    def parse(self):
+        res = self.expr()
+        return res
+    
+#####################################
 
 def run(text):
     lexer = Lexer(text)
     token = lexer.make_tokens()
-    return token
+    parse = Parser(token)
+    ast = parse.parse()
+
+    return token,ast
     
