@@ -2,6 +2,7 @@ import dhokla
 
 while True:
     text = input("Dhokla> ")
-    result = dhokla.run(text)
-    print(result)
+    result,error = dhokla.run(text)
+    if error:print(error.as_string())
+    else:print(result)
 
