@@ -21,6 +21,28 @@ class Position:
             self.col = 0
             self.lineNo += 1
         return self
+    
+    def copy(self): return Position(self.idx,self.lineNo,self.col,self.text)
+
+
+#####################################
+#ERROR
+#####################################
+
+class Error:
+    def __init__(self,posStart,posEnd,errorName,detail) -> None:
+        self.posStart = posStart
+        self.posEnd = posEnd
+        self.errorName = errorName
+        self.detail = detail
+
+    def as_string(self):
+        result = f'{self.errorName}:{self.detail}'
+        return result
+
+class IllegalCharacterError(Error):
+    def __init__(self,posStart,posEnd,detail) -> None:
+        super().__init__(posStart,posEnd,"Illegal Character",detail)
         
 
 
@@ -83,8 +105,10 @@ class Lexer:
             elif self.currChar in DIGITS:
                 tokens.append(self.make_number())
             else:
-                print("---Error Message-----")
-                return []
+                posStart = self.position.copy()
+                char = self.currChar
+                self.advance()
+                return [],IllegalCharacterError(posStart,self.position,char)
         return tokens
 
     def make_number(self):
@@ -172,7 +196,8 @@ class Parser:
 
 def run(text):
     lexer = Lexer(text)
-    token = lexer.make_tokens()
+    token,error = lexer.make_tokens()
+    if error: return None,error
     parse = Parser(token)
     ast = parse.parse()
 
