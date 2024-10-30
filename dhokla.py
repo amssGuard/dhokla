@@ -121,6 +121,12 @@ class Lexer:
             elif self.currChar == '/':
                 tokens.append(Token(TT_DIV,posStart=self.position))
                 self.advance()
+            elif self.currChar == '(':
+                tokens.append(Token(TT_LPAREN,posStart=self.position))
+                self.advance()
+            elif self.currChar == ')':
+                tokens.append(Token(TT_RPAREN,posStart=self.position))
+                self.advance()
             elif self.currChar in DIGITS:
                 tokens.append(self.make_number())
             else:
@@ -195,6 +201,13 @@ class BinOpNode:
         self.op = op
     def __repr__(self) -> str:
         return f'({self.left},{self.op},{self.right})'
+    
+class UnaryOpNode:
+    def __init__(self,op,node) -> None:
+        self.op = op
+        self.node = node
+    def __repr__(self) -> str:
+        return f'({self.op},{self.node})'
 ############
 
 class Parser:
@@ -213,9 +226,23 @@ class Parser:
         res = ParseResult()
         tok = self.currentTok
 
-        if tok.type in (TT_INT,TT_FLOAT):
+        if tok.type in (TT_PLUS,TT_MINUS):
+            res.register(self.advance())
+            factor = res.register(self.factor())
+            if res.error: return res
+            return res.success(UnaryOpNode(tok,factor))
+        elif tok.type in (TT_INT,TT_FLOAT):
             res.register(self.advance())
             return res.success(NumberNode(tok))
+        elif tok.type == TT_LPAREN:
+            res.register(self.advance())
+            expr = res.register(self.expr())
+            if res.error: return res
+            if self.currentTok.type == TT_RPAREN:
+                res.register(self.advance())
+                return res.success(expr)
+            else: return res.failure(IllegalSyntaxError(self.currentTok.posStart,self.currentTok.posEnd,"Expected a ')'"))
+
         return res.failure(IllegalSyntaxError(tok.posStart,tok.posEnd,"Expected an Integer or Float"))
 
     def term(self):
