@@ -12,10 +12,11 @@ DIGITS = "1234567890"
 #Position
 ####################################
 class Position:
-    def __init__(self,idx,lineNo,col,text) -> None:
+    def __init__(self,idx,lineNo,col,fn,text) -> None:
         self.idx = idx
         self.lineNo = lineNo
         self.col = col
+        self.fn = fn
         self.text = text
 
     def advance(self,currCharacter=None):
@@ -27,7 +28,7 @@ class Position:
             self.lineNo += 1
         return self
     
-    def copy(self): return Position(self.idx,self.lineNo,self.col,self.text)
+    def copy(self): return Position(self.idx,self.lineNo,self.col,self.fn,self.text)
 
 
 #####################################
@@ -43,6 +44,7 @@ class Error:
 
     def as_string(self):
         result = f'{self.errorName}:{self.detail}'
+        result += f',File{self.posStart.fn},line:{self.posStart.lineNo+1}'
         result += '\n\n'+ string_with_arrows(self.posStart.text,self.posStart,self.posEnd)
         return result
 
@@ -93,9 +95,10 @@ class Token:
 #####################################
 
 class Lexer: 
-    def __init__(self,text) -> None:
+    def __init__(self,fn,text) -> None:
+        self.fn = fn
         self.text = text
-        self.position = Position(-1,0,-1,text)
+        self.position = Position(-1,0,-1,fn,text)
         self.currChar = None
         self.advance()
 
@@ -191,6 +194,9 @@ class ParseResult:
 class NumberNode:
     def __init__(self,tok) -> None:
         self.tok = tok
+
+        self.posStart = self.tok.posStart
+        self.posEnd = self.tok.posEnd
     def __repr__(self) -> str:
         return f'{self.tok}'
     
@@ -199,6 +205,9 @@ class BinOpNode:
         self.left = left
         self.right = right
         self.op = op
+        
+        self.posStart = self.left.posStart
+        self.posEnd = self.right.posEnd
     def __repr__(self) -> str:
         return f'({self.left},{self.op},{self.right})'
     
@@ -206,6 +215,9 @@ class UnaryOpNode:
     def __init__(self,op,node) -> None:
         self.op = op
         self.node = node
+
+        self.posStart = self.op.posStart
+        self.posEnd = self.node.posEnd
     def __repr__(self) -> str:
         return f'({self.op},{self.node})'
 ############
@@ -273,12 +285,107 @@ class Parser:
     
 #####################################
 
-def run(text):
-    lexer = Lexer(text)
+
+#####################################
+#VALUES
+#####################################
+
+class Number:
+    def __init__(self,value) -> None:
+        self.value = value
+        self.set_pos()
+
+    def set_pos(self,posStart=None,posEnd=None):
+        self.posStart = posStart
+        self.posEnd = posEnd
+        return self
+
+    def added_to(self, other):
+        if isinstance(other,Number):
+            return Number(self.value + other.value)
+        
+    def subbed_to(self, other):
+        if isinstance(other,Number):
+            return Number(self.value - other.value)
+        
+    def multed_to(self, other):
+        if isinstance(other,Number):
+            return Number(self.value * other.value)
+        
+    def dived_to(self, other):
+        if isinstance(other,Number):
+            return Number(self.value / other.value)
+        
+    def __repr__(self) -> str:
+        return str(self.value)
+
+#####################################
+#INTERPRETER
+#####################################
+
+class Interpreter:
+    def visit(self,node):
+        method_name = f'visit_{type(node).__name__}'
+        method = getattr(self,method_name,self.no_visit_method)
+        return method(node)
+    
+    def no_visit_method(self,node):
+        raise Exception(f'No visit_{type(node).__name__} method defined')
+    
+    ###########
+
+    def visit_NumberNode(self,node):
+        return Number(node.tok.value).set_pos(node.posStart,node.posEnd)
+
+    def visit_BinOpNode(self,node):
+        leftnode = self.visit(node.left)
+        rightnode = self.visit(node.right)
+
+        if leftnode is None:
+            print("Error: Left operand is None")
+        if rightnode is None:
+            print("Error: Right operand is None")
+
+        if node.op.type == TT_PLUS:
+            result = leftnode.added_to(rightnode)
+        elif node.op.type == TT_MINUS:
+            result = leftnode.subbed_to(rightnode)
+        elif node.op.type == TT_MUL:
+            result = leftnode.multed_to(rightnode)
+        elif node.op.type == TT_DIV:
+            result = leftnode.dived_to(rightnode)
+
+        return result.set_pos(node.posStart,node.posEnd)
+    
+    def visit_UnaryOpNode(self,node):
+        number = self.visit(node.node)
+
+        if node.op.type == TT_PLUS:
+            number = number.multed_to(Number(-1))
+
+        return number.set_pos(node.posStart,node.posEnd)
+
+#####################################
+
+
+#####################################
+#RUN
+#####################################
+
+def run(fileName,text):
+    lexer = Lexer(fileName,text)
     token,error = lexer.make_tokens()
+    #print(token)
     if error: return None,error
     parse = Parser(token)
     ast = parse.parse()
 
-    return ast.node,ast.error#token,ast.node
+    if ast.error: return None,ast.error
+
+    interpreter = Interpreter()
+    interpreter.visit(ast.node)
+    result = interpreter.visit(ast.node)
+
+    return result,None
+    #return ast.node,ast.error#token,ast.node
     
