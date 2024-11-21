@@ -55,6 +55,10 @@ class IllegalCharacterError(Error):
 class IllegalSyntaxError(Error):
     def __init__(self,posStart,posEnd,detail) -> None:
         super().__init__(posStart,posEnd,"Illegal Syntax",detail)
+
+class RTError(Error):
+    def __init__(self, posStart, posEnd, detail) -> None:
+        super().__init__(posStart, posEnd, 'Runtime Error', detail)
         
 
 
@@ -287,6 +291,27 @@ class Parser:
 
 
 #####################################
+#RUNTIME RESULT
+#####################################
+class RTResult:
+    def __init__(self) -> None:
+            self.value = None
+            self.error = None
+    
+    def register(self,res):
+        if res.error: self.error = res.error
+        return res.value
+
+    def success(self,value):
+        self.value = value
+        return self
+
+    def failure(self,error):
+        self.error = error
+        return self
+
+
+#####################################
 #VALUES
 #####################################
 
@@ -302,19 +327,21 @@ class Number:
 
     def added_to(self, other):
         if isinstance(other,Number):
-            return Number(self.value + other.value)
+            return Number(self.value + other.value),None
         
     def subbed_to(self, other):
         if isinstance(other,Number):
-            return Number(self.value - other.value)
+            return Number(self.value - other.value),None
         
     def multed_to(self, other):
         if isinstance(other,Number):
-            return Number(self.value * other.value)
+            return Number(self.value * other.value),None
         
     def dived_to(self, other):
         if isinstance(other,Number):
-            return Number(self.value / other.value)
+            if other.value == 0:
+                return None,RTError(other.posStart,other.posEnd,'Division by Zero')
+            return Number(self.value / other.value),None
         
     def __repr__(self) -> str:
         return str(self.value)
@@ -335,11 +362,14 @@ class Interpreter:
     ###########
 
     def visit_NumberNode(self,node):
-        return Number(node.tok.value).set_pos(node.posStart,node.posEnd)
+        return RTResult().success(Number(node.tok.value).set_pos(node.posStart,node.posEnd))
 
     def visit_BinOpNode(self,node):
-        leftnode = self.visit(node.left)
-        rightnode = self.visit(node.right)
+        res = RTResult()
+        leftnode = res.register(self.visit(node.left))
+        if res.error: return res
+        rightnode = res.register(self.visit(node.right))
+        if res.error: return res
 
         if leftnode is None:
             print("Error: Left operand is None")
@@ -347,23 +377,31 @@ class Interpreter:
             print("Error: Right operand is None")
 
         if node.op.type == TT_PLUS:
-            result = leftnode.added_to(rightnode)
+            result,error = leftnode.added_to(rightnode)
         elif node.op.type == TT_MINUS:
-            result = leftnode.subbed_to(rightnode)
+            result,error = leftnode.subbed_to(rightnode)
         elif node.op.type == TT_MUL:
-            result = leftnode.multed_to(rightnode)
+            result,error = leftnode.multed_to(rightnode)
         elif node.op.type == TT_DIV:
-            result = leftnode.dived_to(rightnode)
+            result,error = leftnode.dived_to(rightnode)
 
-        return result.set_pos(node.posStart,node.posEnd)
+        if error: return res.failure(error)
+        else:
+            return res.success(result.set_pos(node.posStart,node.posEnd))
     
     def visit_UnaryOpNode(self,node):
-        number = self.visit(node.node)
+        res = RTResult()
+        number,error = res.register(self.visit(node.node))
+        if res.error: return res
 
+        error = None
         if node.op.type == TT_PLUS:
             number = number.multed_to(Number(-1))
 
-        return number.set_pos(node.posStart,node.posEnd)
+        if error:
+            return res.failure(error)
+        else:
+            return res.success(number.set_pos(node.posStart,node.posEnd))
 
 #####################################
 
@@ -379,13 +417,12 @@ def run(fileName,text):
     if error: return None,error
     parse = Parser(token)
     ast = parse.parse()
-
+    print(ast.node)
     if ast.error: return None,ast.error
 
     interpreter = Interpreter()
-    interpreter.visit(ast.node)
     result = interpreter.visit(ast.node)
 
-    return result,None
+    return result.value,result.error
     #return ast.node,ast.error#token,ast.node
     
