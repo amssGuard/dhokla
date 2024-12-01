@@ -54,6 +54,10 @@ class IllegalCharacterError(Error):
     def __init__(self,posStart,posEnd,detail) -> None:
         super().__init__(posStart,posEnd,"Illegal Character",detail)
 
+class ExpectedCharError(Error):
+    def __init__(self, posStart, posEnd, detail) -> None:
+        super().__init__(posStart, posEnd, "Expected Character", detail)
+
 class IllegalSyntaxError(Error):
     def __init__(self,posStart,posEnd,detail) -> None:
         super().__init__(posStart,posEnd,"Illegal Syntax",detail)
@@ -97,9 +101,15 @@ TT_POW        = 'POW'
 TT_EQ         = 'EQ'
 TT_LPAREN     = 'LPAREN'
 TT_RPAREN     = 'RPAREN'
+TT_EE         = 'EE'
+TT_NE         = 'NE'
+TT_LT         = 'LT'
+TT_GT         = 'GT'
+TT_LTE        = 'LTE'
+TT_GTE        = 'GTE'
 TT_EOF        = 'EOF'
 
-KEYWORDS = ['VAR',]
+KEYWORDS = ['VAR','AND','OR','NOT']
 
 class Token:
     def __init__(self,type_,value=None,posStart=None,posEnd=None) -> None:
@@ -160,9 +170,6 @@ class Lexer:
             elif self.currChar == '^':
                 tokens.append(Token(TT_POW,posStart=self.position))
                 self.advance()
-            elif self.currChar == '=':
-                tokens.append(Token(TT_EQ,posStart=self.position))
-                self.advance()
             elif self.currChar == '(':
                 tokens.append(Token(TT_LPAREN,posStart=self.position))
                 self.advance()
@@ -173,6 +180,16 @@ class Lexer:
                 tokens.append(self.make_number())
             elif self.currChar in LETTERS:
                 tokens.append(self.make_identifier())
+            elif self.currChar == '!':
+                tok,error = self.make_not_equals()
+                if error: return[],error
+                tokens.append(tok)
+            elif self.currChar == '=':
+                tokens.append(self.make_equals())
+            elif self.currChar == '<':
+                tokens.append(self.make_less_than())
+            elif self.currChar == '>':
+                tokens.append(self.make_greater_than())
             else:
                 posStart = self.position.copy()
                 char = self.currChar
@@ -208,6 +225,42 @@ class Lexer:
 
         tok_type = TT_KEYWORD if id_str in KEYWORDS else TT_IDENTIFIER
         return Token(tok_type, id_str, posStart, self.position)
+
+    def make_not_equals(self):
+        posStart = self.position.copy()
+        self.advance()
+        if self.currChar == '=':
+            self.advance()
+            return Token(TT_NE,posStart=posStart,posEnd=self.position),None
+        self.advance()
+        return None,ExpectedCharError(posStart,self.position,"'=' (after '!')")
+
+    def make_equals(self):
+        tok_type = TT_EQ
+        posStart = self.position.copy()
+        self.advance()
+        if self.currChar == '=':
+            self.advance()
+            tok_type =  TT_EE
+        return Token(tok_type,posStart=posStart,posEnd=self.position)
+
+    def make_less_than(self):
+        tok_type = TT_LT
+        posStart = self.position.copy()
+        self.advance()
+        if self.currChar == '=':
+            self.advance()
+            tok_type =  TT_LTE
+        return Token(tok_type,posStart=posStart,posEnd=self.position)
+
+    def make_greater_than(self):
+        tok_type = TT_GT
+        posStart = self.position.copy()
+        self.advance()
+        if self.currChar == '=':
+            self.advance()
+            tok_type =  TT_GTE
+        return Token(tok_type,posStart=posStart,posEnd=self.position)
 #####################################
 
 
@@ -588,7 +641,7 @@ global_symbol_table.set('null',Number(0))
 def run(fileName,text):
     lexer = Lexer(fileName,text)
     token,error = lexer.make_tokens()
-    #print(token)
+    print(token)
     if error: return None,error
     parse = Parser(token)
     ast = parse.parse()
