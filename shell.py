@@ -1,9 +1,9 @@
-import dhokla
+import dhokla 
 
 while True:
-    text = input("Dhokla> ")
-    result,error = dhokla.run('<stdin>',text)
-    if error:print(error.as_string())
-    else:print(result)
+    text = input('Dhokla> ')
+    result,error = dhokla.run(text)
+    #result,error = dhokla.run_with_vm(text)
 
-    #print(result,error.as_string())
+    if error: print(error.as_string())
+    elif result:print(result)
