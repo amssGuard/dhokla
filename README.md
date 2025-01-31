@@ -1,4 +1,4 @@
-# Dhokla: Lightweight Interpreter Project
+# Dhokla: Lightweight Interpreter
 
 ## **Overview**
 Dhokla is a lightweight interpreter designed to parse and execute custom programming instructions. This project explores the fundamental principles of interpreter design, including tokenization, parsing, and evaluation. It serves as a learning experience in understanding how programming languages process and execute code.
